@@ -1,0 +1,5 @@
+# requirements.txt
+
+requests
+mysql-connector-python
+python-dotenv
