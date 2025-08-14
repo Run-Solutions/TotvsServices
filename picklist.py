@@ -122,7 +122,7 @@ def insertar_picklist_detalle(cursor, picklist_id, data):
     """
     add_detalle = (
         """
-        INSERT INTO PickListDetalle (PickListID, ProductoID, ProductoDescripcion, CantidadLiberada, UbicacionTotvs)
+        INSERT INTO PickListDetalle (PickListID, ProductoID, ProductoDescripcion, CantidadRequerida, UbicacionTotvs)
         VALUES (%s, %s, %s, %s, %s)
         """
     )

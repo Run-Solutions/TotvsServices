@@ -4,34 +4,27 @@ from utils.logger import logger
 import mysql.connector
 
 def insertar_picklist(cursor, data):
+    sql = """
+    INSERT INTO PickList (ClienteID, Deposito, Pedido, Cliente, TiendaTOTVS)
+    VALUES (%s, %s, %s, %s, %s) AS new
+    ON DUPLICATE KEY UPDATE
+        Cliente    = new.Cliente,
+        TiendaTOTVS     = new.TiendaTOTVS,
+        PickListID = LAST_INSERT_ID(PickList.PickListID)
     """
-    Inserta un registro en la tabla PickList.
-    Retorna el PickListID generado.
-    """
-    try:
-        add_picklist = (
-            """
-            INSERT INTO PickList (ClienteID, Deposito, Pedido, Cliente, Tienda)
-            VALUES (%s, %s, %s, %s, %s)
-            """
-        )
-        picklist_data = (
-            data['cliente'],          # Acceso directo para lanzar KeyError si falta
-            data['deposito'],         # Acceso directo para lanzar KeyError si falta
-            data['pedido'],           # Acceso directo para lanzar KeyError si falta
-            data['nombre'],           # Acceso directo para lanzar KeyError si falta
-            data['tienda']            # Acceso directo para lanzar KeyError si falta
-        )
-        cursor.execute(add_picklist, picklist_data)
-        picklist_id = cursor.lastrowid
-        logger.info(f"Insertado PickList con PickListID: {picklist_id}")
-        return picklist_id
-    except KeyError as e:
-        logger.error(f"Campo faltante: {e}")
-        raise
-    except mysql.connector.Error as err:
-        logger.error(f"Error al insertar en PickList: {err}")
-        raise
+    args = (
+        data['cliente'],
+        data['deposito'],
+        data['pedido'],
+        data['nombre'],
+        data['tienda'],
+    )
+    cursor.execute(sql, args)
+    picklist_id = cursor.lastrowid
+    logger.info(f"PickListID: {picklist_id} (creado o recuperado)")
+    return picklist_id
+
+
 
 def insertar_picklist_detalle(cursor, picklist_id, data):
     """
@@ -39,7 +32,7 @@ def insertar_picklist_detalle(cursor, picklist_id, data):
     """
     add_detalle = (
         """
-        INSERT INTO PickListDetalle (PickListID, ProductoID, ProductoDescripcion, CantidadLiberada, UbicacionTotvs)
+        INSERT INTO PickListDetalle (PickListID, ProductoID, ProductoDescripcion, CantidadRequerida, UbicacionTotvs)
         VALUES (%s, %s, %s, %s, %s)
         """
     )
