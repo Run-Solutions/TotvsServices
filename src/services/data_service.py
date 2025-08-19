@@ -30,27 +30,39 @@ class DataService:
         except Exception as e:
             logger.error(f"Error al eliminar datos: {e}")
 
-    def insertar_datos(self, datos):
-        """Inserta los datos obtenidos de la API en la base de datos."""
+    def insertar_datos(self, datos: list[dict]):
+        nuevos_ids: list[int] = []
         try:
             if not self.cnx.in_transaction:
                 self.cnx.start_transaction()
-                logger.info("Transacción iniciada.")
+                logger.info("Transacción iniciada (PickList + Detalle).")
 
-            for registro in datos:
+            for i, registro in enumerate(datos, 1):
                 if not validate_data(registro):
-                    logger.warning(f"Registro inválido omitido: {registro}")
+                    logger.warning("Registro inválido omitido (índice %s): %s", i, registro)
                     continue
 
-                picklist_id = insertar_picklist(self.cursor, registro)
-                insertar_picklist_detalle(self.cursor, picklist_id, registro)
+                pid, is_new = insertar_picklist(self.cursor, registro)
+
+                # Solo creamos detalle si es un PickList NUEVO
+                if is_new:
+                    insertar_picklist_detalle(self.cursor, pid, registro)
+                    nuevos_ids.append(pid)
+                else:
+                    logger.info("PickList existente (tienda ya registrada). Saltando detalle. ID=%s", pid)
+
+            # Actualiza maestro->detalle solo para los NUEVOS
+            if nuevos_ids:
+                from db.operations import actualizar_detalle_desde_picklist
+                actualizar_detalle_desde_picklist(self.cursor, list(set(nuevos_ids)))
 
             self.cnx.commit()
-            logger.info("Todos los datos han sido insertados correctamente.")
+            logger.info("Insertados %s nuevos PickList (y sus detalles).", len(nuevos_ids))
 
         except Exception as e:
             self.cnx.rollback()
-            logger.error(f"Error durante la inserción: {e}")
+            logger.error(f"Error durante la inserción maestro-detalle: {e}")
+            raise
 
     def cerrar_conexion(self):
         """Cierra la conexión con la base de datos."""

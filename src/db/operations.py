@@ -87,4 +87,47 @@ def insertar_producto_ubicacion(cursor, data: dict):
         logger.info("UPSERT ProductosUbicacion (%s, %s)", data.get("ProductoID"), data.get("UbicacionID"))
     except mysql.connector.Error as err:
         logger.error(f"Error al insertar/actualizar en ProductosUbicacion: {err}")
+        
+    
+def actualizar_detalle_desde_picklist(cursor, picklist_ids=None):
+    """
+    Copia Pedido, ClienteID y TiendaTOTVS desde PickList hacia PickListDetalle
+    usando UPDATE ... JOIN por PickListID.
+
+    Si se pasa picklist_ids (lista/tuple), solo actualiza esos PickListID.
+    Maneja el SQL con placeholders para evitar inyección.
+
+    Importante: requiere que existen las columnas:
+      - PickListDetalle.Pedido, PickListDetalle.ClienteID, PickListDetalle.TiendaTOTVS
+      - PickList.Pedido, PickList.ClienteID, PickList.TiendaTOTVS
+    y que PickListDetalle.PickListID tenga índice (recomendado).
+    """
+    try:
+        if picklist_ids:
+            placeholders = ",".join(["%s"] * len(picklist_ids))
+            sql = f"""
+                UPDATE PickListDetalle D
+                JOIN PickList P ON D.PickListID = P.PickListID
+                SET
+                  D.Pedido      = P.Pedido,
+                  D.ClienteID   = P.ClienteID,
+                  D.TiendaTOTVS = P.TiendaTOTVS
+                WHERE D.PickListID IN ({placeholders})
+            """
+            cursor.execute(sql, tuple(picklist_ids))
+        else:
+            sql = """
+                UPDATE PickListDetalle D
+                JOIN PickList P ON D.PickListID = P.PickListID
+                SET
+                  D.Pedido      = P.Pedido,
+                  D.ClienteID   = P.ClienteID,
+                  D.TiendaTOTVS = P.TiendaTOTVS
+            """
+            cursor.execute(sql)
+
+        logger.info("Actualizados PickListDetalle desde PickList. Filas afectadas: %s", cursor.rowcount)
+
+    except mysql.connector.Error as err:
+        logger.error(f"Error al actualizar PickListDetalle desde PickList: {err}")
         raise
