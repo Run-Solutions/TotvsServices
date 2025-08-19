@@ -48,7 +48,7 @@ class APIService:
     # 3) Consulta PROUBI (RYM0503) SIN path y con body JSON (como en Postman)
     def consultar_proubi_por_registro(self, reg: dict) -> list[dict]:
         body = self._build_proubi_body(reg)
-        logger.info("Consultando PROUBI (GET con body): %s", body)
+        # logger.info("Consultando PROUBI (GET con body): %s", body)
         res = self.api.get_proubi(json_body=body)
         return res if isinstance(res, list) else []
 

@@ -19,6 +19,7 @@ def insertar_picklist(cursor, data):
         data['nombre'],
         data['tienda'],
     )
+    logger.info(data)
     cursor.execute(sql, args)
     picklist_id = cursor.lastrowid
     logger.info(f"PickListID: {picklist_id} (creado o recuperado)")
