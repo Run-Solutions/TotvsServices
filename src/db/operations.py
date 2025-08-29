@@ -29,27 +29,37 @@ def insertar_picklist(cursor, data):
 
 def insertar_picklist_detalle(cursor, picklist_id, data):
     """
-    Inserta un registro en la tabla PickListDetalle.
+    Inserta un detalle si NO existe la combinación (PickListID, ProductoID, UbicacionTotvs).
+    Si ya existe, NO actualiza nada y NO lanza error.
+    Requiere UNIQUE (PickListID, ProductoID, UbicacionTotvs).
     """
-    add_detalle = (
-        """
-        INSERT INTO PickListDetalle (PickListID, ProductoID, ProductoDescripcion, CantidadRequerida, UbicacionTotvs)
-        VALUES (%s, %s, %s, %s, %s)
-        """
-    )
-    detalle_data = (
+    sql = """
+    INSERT INTO PickListDetalle AS new
+        (PickListID, ProductoID, ProductoDescripcion, CantidadRequerida, UbicacionTotvs)
+    VALUES
+        (%s, %s, %s, %s, %s)
+    ON DUPLICATE KEY UPDATE
+        -- no-op total: no cambia ninguna columna
+        PickListDetalleID = PickListDetalleID
+    """
+    args = (
         picklist_id,
         data.get('producto'),
         data.get('descripcion'),
         data.get('cantidad_liberada'),
-        data.get('ubicacion') if data.get('ubicacion') else None
+        (data.get('ubicacion') or ''),  # si definiste NOT NULL DEFAULT ''
     )
     try:
-        cursor.execute(add_detalle, detalle_data)
-        detalle_id = cursor.lastrowid
-        logger.info(f"Insertado PickListDetalle con PickListDetalleID: {detalle_id}")
-    except mysql.connector.Error as err:
-        logger.error(f"Error al insertar en PickListDetalle: {err}")
+        cursor.execute(sql, args)
+        if cursor.rowcount == 1:
+            # fue insert
+            logger.info("Insertado PickListDetalleID=%s", cursor.lastrowid)
+        else:
+            # duplicado: omitido sin cambios
+            logger.info("Detalle duplicado OMITIDO (PL=%s, Prod=%s, Ub=%s)",
+                        picklist_id, data.get('producto'), data.get('ubicacion') or '')
+    except mysql.connector.Error:
+        logger.exception("Error al insertar PickListDetalle")
         raise
 
 def insertar_producto_ubicacion(cursor, data: dict):
