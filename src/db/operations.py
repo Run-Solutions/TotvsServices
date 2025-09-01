@@ -5,41 +5,38 @@ import mysql.connector
 
 def insertar_picklist(cursor, data):
     sql = """
-    INSERT INTO PickList (ClienteID, Deposito, Pedido, Cliente, TiendaTOTVS)
-    VALUES (%s, %s, %s, %s, %s) AS new
+    INSERT INTO PickList
+        (ClienteID, Deposito, Pedido, Cliente, TiendaTOTVS)
+    VALUES
+        (%s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
-        Cliente    = new.Cliente,
-        TiendaTOTVS     = new.TiendaTOTVS,
-        PickListID = LAST_INSERT_ID(PickList.PickListID)
+        Cliente     = %s,
+        TiendaTOTVS = %s,
+        PickListID  = LAST_INSERT_ID(PickListID)
     """
     args = (
-        data['cliente'],
+        data['cliente'],   # INSERT
         data['deposito'],
         data['pedido'],
         data['nombre'],
         data['tienda'],
+        data['nombre'],    # UPDATE (repetidos)
+        data['tienda'],
     )
-    logger.info(data)
     cursor.execute(sql, args)
-    picklist_id = cursor.lastrowid
-    logger.info(f"PickListID: {picklist_id} (creado o recuperado)")
-    return picklist_id
+    return cursor.lastrowid  # sirve tanto en insert como en duplicado
 
 
 
 def insertar_picklist_detalle(cursor, picklist_id, data):
-    """
-    Inserta un detalle si NO existe la combinación (PickListID, ProductoID, UbicacionTotvs).
-    Si ya existe, NO actualiza nada y NO lanza error.
-    Requiere UNIQUE (PickListID, ProductoID, UbicacionTotvs).
-    """
+    ubic = (data.get('ubicacion') or '').strip().upper()
+
     sql = """
-    INSERT INTO PickListDetalle AS new
+    INSERT INTO PickListDetalle
         (PickListID, ProductoID, ProductoDescripcion, CantidadRequerida, UbicacionTotvs)
     VALUES
         (%s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
-        -- no-op total: no cambia ninguna columna
         PickListDetalleID = PickListDetalleID
     """
     args = (
@@ -47,20 +44,16 @@ def insertar_picklist_detalle(cursor, picklist_id, data):
         data.get('producto'),
         data.get('descripcion'),
         data.get('cantidad_liberada'),
-        (data.get('ubicacion') or ''),  # si definiste NOT NULL DEFAULT ''
+        ubic,
     )
-    try:
-        cursor.execute(sql, args)
-        if cursor.rowcount == 1:
-            # fue insert
-            logger.info("Insertado PickListDetalleID=%s", cursor.lastrowid)
-        else:
-            # duplicado: omitido sin cambios
-            logger.info("Detalle duplicado OMITIDO (PL=%s, Prod=%s, Ub=%s)",
-                        picklist_id, data.get('producto'), data.get('ubicacion') or '')
-    except mysql.connector.Error:
-        logger.exception("Error al insertar PickListDetalle")
-        raise
+    cursor.execute(sql, args)
+
+    if cursor.rowcount == 1:
+        logger.info("Insertado PickListDetalleID=%s", cursor.lastrowid)
+    else:
+        logger.info("Detalle duplicado OMITIDO (PL=%s, Prod=%s, Ub=%s)",
+                    picklist_id, data.get('producto'), ubic)
+
 
 def insertar_producto_ubicacion(cursor, data: dict):
     """

@@ -18,7 +18,7 @@ def main():
     try:
         data_service.conectar_bd()
 
-        data_service.limpiar_tablas()
+        # data_service.limpiar_tablas()
 
         # 3) Inserta PickList y PickListDetalle
         data_service.insertar_datos(picklist)
