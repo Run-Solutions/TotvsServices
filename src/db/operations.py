@@ -57,24 +57,16 @@ def insertar_picklist_detalle(cursor, picklist_id, data):
 
 def insertar_producto_ubicacion(cursor, data: dict):
     """
-    UPSERT en ProductosUbicacion compatible con MySQL 8.0+ (sin VALUES() deprecado).
+    Inserta en ProductosUbicacion solo si NO existe la combinación (ProductoID, UbicacionID).
+    Si existe, NO inserta ni actualiza (evita tocar el ID existente y no dispara triggers de UPDATE).
     Requiere UNIQUE (ProductoID, UbicacionID).
     """
     try:
         sql = """
-        INSERT INTO ProductosUbicacion
+        INSERT IGNORE INTO ProductosUbicacion
             (ProductoID, ProductoDescripcion, UbicacionID, AnaquelID, Stock, StockMinimo, SYNC, SYNCUsuario, tmpSwap)
         VALUES
             (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        AS new
-        ON DUPLICATE KEY UPDATE
-            ProductoDescripcion = new.ProductoDescripcion,
-            AnaquelID           = new.AnaquelID,
-            Stock               = new.Stock,
-            StockMinimo         = new.StockMinimo,
-            SYNC                = new.SYNC,
-            SYNCUsuario         = new.SYNCUsuario,
-            tmpSwap             = new.tmpSwap
         """
         args = (
             data.get("ProductoID"),
@@ -88,10 +80,19 @@ def insertar_producto_ubicacion(cursor, data: dict):
             data.get("tmpSwap"),
         )
         cursor.execute(sql, args)
-        logger.info("UPSERT ProductosUbicacion (%s, %s)", data.get("ProductoID"), data.get("UbicacionID"))
+
+        if cursor.rowcount == 1:
+            # Insertó nuevo
+            logger.info("INSERT ProductosUbicacion (ProductoID=%s, UbicacionID=%s) -> nuevo",
+                        data.get("ProductoID"), data.get("UbicacionID"))
+        else:
+            # Ya existía; no se insertó ni actualizó
+            logger.info("INSERT IGNORE: ya existía ProductosUbicacion (ProductoID=%s, UbicacionID=%s) -> omitido",
+                        data.get("ProductoID"), data.get("UbicacionID"))
+
     except mysql.connector.Error as err:
-        logger.error(f"Error al insertar/actualizar en ProductosUbicacion: {err}")
-        
+        logger.exception("Error al insertar en ProductosUbicacion")
+        raise  
     
 def actualizar_detalle_desde_picklist(cursor, picklist_ids=None):
     """
