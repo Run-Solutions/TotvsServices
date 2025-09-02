@@ -33,9 +33,9 @@ def insertar_picklist_detalle(cursor, picklist_id, data):
 
     sql = """
     INSERT INTO PickListDetalle
-        (PickListID, ProductoID, ProductoDescripcion, CantidadRequerida, UbicacionTotvs)
+        (PickListID, ProductoID, ProductoDescripcion, CantidadRequerida, UbicacionTotvs, Recolectado, CantidadSurtida)
     VALUES
-        (%s, %s, %s, %s, %s)
+        (%s, %s, %s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
         PickListDetalleID = PickListDetalleID
     """
@@ -45,6 +45,9 @@ def insertar_picklist_detalle(cursor, picklist_id, data):
         data.get('descripcion'),
         data.get('cantidad_liberada'),
         ubic,
+        0,  # Recolectado siempre inicia en 0
+        0,  # CantidadSurtida siempre inicia en 0
+
     )
     cursor.execute(sql, args)
 
