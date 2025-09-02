@@ -136,3 +136,36 @@ def actualizar_detalle_desde_picklist(cursor, picklist_ids=None):
     except mysql.connector.Error as err:
         logger.error(f"Error al actualizar PickListDetalle desde PickList: {err}")
         raise
+
+def mapear_ubicacionid_en_picklistdetalle(cursor):
+    """
+    Actualiza en bloque PickListDetalle.UbicacionID buscando el match en ProductosUbicacion
+    por (ProductoID, UbicacionTotvs ~ UbicacionID). Solo actualiza filas donde UbicacionID
+    está NULL o vacío. Devuelve la cantidad de filas afectadas.
+
+    Emparejamiento case-insensitive y sin espacios al borde:
+      UPPER(TRIM(PickListDetalle.UbicacionTotvs)) = UPPER(TRIM(ProductosUbicacion.UbicacionID))
+
+    Requisitos recomendados de índice:
+      - ProductosUbicacion: UNIQUE(ProductoID, UbicacionID)
+      - PickListDetalle:   INDEX (ProductoID, UbicacionTotvs)
+    """
+    sql = """
+        UPDATE PickListDetalle d
+        JOIN ProductosUbicacion pu
+          ON pu.ProductoID = d.ProductoID
+         AND UPPER(TRIM(pu.UbicacionID)) = UPPER(TRIM(d.UbicacionTotvs))
+        SET d.UbicacionID = pu.ProductoUbicacionID
+        WHERE (d.UbicacionID IS NULL OR d.UbicacionID = '')
+          AND d.ProductoID IS NOT NULL
+          AND d.UbicacionTotvs IS NOT NULL
+          AND TRIM(d.UbicacionTotvs) <> ''
+    """
+    try:
+        cursor.execute(sql)
+        filas = cursor.rowcount
+        logger.info("PickListDetalle.UbicacionID mapeado desde ProductosUbicacion. Filas afectadas: %s", filas)
+        return filas
+    except mysql.connector.Error:
+        logger.exception("Error mapeando UbicacionID en PickListDetalle")
+        raise

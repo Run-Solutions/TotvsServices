@@ -27,7 +27,6 @@ def main():
         if productos_ubi:
             data_service.insertar_productos_ubicacion(productos_ubi)
 
-
     except Exception as e:
         logger.error(f"Error al procesar datos: {e}")
     finally:

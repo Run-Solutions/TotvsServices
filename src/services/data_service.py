@@ -1,5 +1,5 @@
 from db.connection import get_db_connection
-from db.operations import insertar_picklist, insertar_picklist_detalle, insertar_producto_ubicacion
+from db.operations import insertar_picklist, insertar_picklist_detalle, insertar_producto_ubicacion, mapear_ubicacionid_en_picklistdetalle
 from utils.logger import logger
 from utils.helpers import validate_data
 
@@ -133,7 +133,8 @@ class DataService:
 
             for r in registros:
                 insertar_producto_ubicacion(self.cursor, r)
-
+            
+            mapear_ubicacionid_en_picklistdetalle(self.cursor)
             self.cnx.commit()
             logger.info("ProductosUbicacion insertado/actualizado correctamente.")
         except Exception as e:
