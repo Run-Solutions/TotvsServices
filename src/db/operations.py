@@ -119,7 +119,8 @@ def actualizar_detalle_desde_picklist(cursor, picklist_ids=None):
                 SET
                   D.Pedido      = P.Pedido,
                   D.ClienteID   = P.ClienteID,
-                  D.TiendaTOTVS = P.TiendaTOTVS
+                  D.TiendaTOTVS = P.TiendaTOTVS,
+                  D.Tienda = CONCAT(P.ClienteID, '-', P.TiendaTOTVS)
                 WHERE D.PickListID IN ({placeholders})
             """
             cursor.execute(sql, tuple(picklist_ids))
@@ -130,7 +131,9 @@ def actualizar_detalle_desde_picklist(cursor, picklist_ids=None):
                 SET
                   D.Pedido      = P.Pedido,
                   D.ClienteID   = P.ClienteID,
-                  D.TiendaTOTVS = P.TiendaTOTVS
+                  D.TiendaTOTVS = P.TiendaTOTVS,
+                  D.Tienda = CONCAT(P.ClienteID, '-', P.TiendaTOTVS)
+
             """
             cursor.execute(sql)
 
@@ -159,8 +162,7 @@ def mapear_ubicacionid_en_picklistdetalle(cursor):
           ON pu.ProductoID = d.ProductoID
          AND UPPER(TRIM(pu.UbicacionID)) = UPPER(TRIM(d.UbicacionTotvs))
         SET d.UbicacionID = pu.ProductoUbicacionID
-        WHERE (d.UbicacionID IS NULL OR d.UbicacionID = '')
-          AND d.ProductoID IS NOT NULL
+        WHERE d.ProductoID IS NOT NULL
           AND d.UbicacionTotvs IS NOT NULL
           AND TRIM(d.UbicacionTotvs) <> ''
     """
