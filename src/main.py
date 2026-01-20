@@ -18,7 +18,7 @@ def main():
     try:
         data_service.conectar_bd()
 
-        # data_service.limpiar_tablas()
+        #data_service.limpiar_tablas()
 
         # 3) Inserta PickList y PickListDetalle
         data_service.insertar_datos(picklist)
@@ -26,6 +26,8 @@ def main():
         # 4) Inserta/actualiza ProductosUbicacion
         if productos_ubi:
             data_service.insertar_productos_ubicacion(productos_ubi)
+        
+        data_service.asegurar_productos_desde_picklist()
 
     except Exception as e:
         logger.error(f"Error al procesar datos: {e}")

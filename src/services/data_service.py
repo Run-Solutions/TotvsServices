@@ -1,5 +1,12 @@
 from db.connection import get_db_connection
-from db.operations import insertar_picklist, insertar_picklist_detalle, insertar_producto_ubicacion, mapear_ubicacionid_en_picklistdetalle
+from db.operations import (
+    insertar_picklist,
+    insertar_picklist_detalle,
+    insertar_producto_ubicacion,
+    mapear_ubicacionid_en_picklistdetalle,
+    cargarPicklistDetalle,
+    asegurar_cliente_tienda,
+)
 from utils.logger import logger
 from utils.helpers import validate_data
 
@@ -74,22 +81,26 @@ class DataService:
             # 2) Agrupar por (pedido, tienda, cliente, deposito)
             grupos = {}
             for r in validos:
-                key = (r['pedido'], r['tienda'], r['cliente'], r['deposito'])
+                key = (r['pedido'], r['tienda'], r['cliente'], r['deposito'], r['item'])
                 grupos.setdefault(key, []).append(r)
 
-            logger.info("Total grupos (pedido, tienda, cliente, deposito): %s", len(grupos))
+            logger.info("Total grupos (pedido, tienda, cliente, deposito, item): %s", len(grupos))
 
             afectados_ids = set()
             total_detalles_intentados = 0
 
             # 3) Insertar/recuperar PickList por grupo y luego TODOS sus detalles
-            for (pedido, tienda, cliente, deposito), registros in grupos.items():
+            for (pedido, tienda, cliente, deposito, item), registros in grupos.items():
+                logger.info("Procesando grupo: pedido=%s, tienda=%s, cliente=%s, deposito=%s, item=%s",
+                            pedido, tienda, cliente, deposito, item)
+                asegurar_cliente_tienda(self.cursor, cliente, tienda)
                 header = {
                     'cliente':  cliente,
                     'deposito': deposito,
                     'pedido':   pedido,
                     'nombre':   registros[0].get('nombre', ''),
                     'tienda':   tienda,
+                    'item':     item
                 }
 
                 # insertar_picklist devuelve SOLO el ID
@@ -104,7 +115,7 @@ class DataService:
             if afectados_ids:
                 from db.operations import actualizar_detalle_desde_picklist
                 actualizar_detalle_desde_picklist(self.cursor, list(afectados_ids))
-
+            cargarPicklistDetalle(self.cursor)
             self.cnx.commit()
             logger.info(
                 "Grupos procesados: %s | Detalles procesados (insertados/omitidos por UNIQUE): %s",
@@ -114,6 +125,53 @@ class DataService:
         except Exception as e:
             self.cnx.rollback()
             logger.error(f"Error durante la inserción maestro-detalle por grupos: {e}")
+            raise
+
+    def asegurar_productos_desde_picklist(self) -> int:
+        """
+        Inserta en Productos los ProductoID que existan en PickListDetalle pero no estén en Productos.
+        Usa la descripción disponible en PickListDetalle. Devuelve la cantidad de productos insertados.
+        """
+        try:
+            started_transaction = False
+            if not self.cnx.in_transaction:
+                self.cnx.start_transaction()
+                logger.info("Transacción iniciada (Productos faltantes desde PickListDetalle).")
+                started_transaction = True
+
+            consulta_faltantes = """
+                SELECT DISTINCT
+                    TRIM(d.ProductoID) AS ProductoID,
+                    COALESCE(NULLIF(TRIM(d.ProductoDescripcion), ''), TRIM(d.ProductoID)) AS ProductoDescripcion
+                FROM PickListDetalle d
+                LEFT JOIN Productos p ON p.ProductoID = d.ProductoID
+                WHERE d.ProductoID IS NOT NULL
+                  AND TRIM(d.ProductoID) <> ''
+                  AND p.ProductoID IS NULL
+            """
+            self.cursor.execute(consulta_faltantes)
+            faltantes = self.cursor.fetchall()
+
+            if not faltantes:
+                logger.info("No se encontraron productos nuevos para registrar en Productos.")
+                if started_transaction:
+                    self.cnx.commit()
+                return 0
+
+            insercion = """
+                INSERT INTO Productos (ProductoID, ProductoDescripcion)
+                VALUES (%s, %s)
+            """
+            self.cursor.executemany(insercion, faltantes)
+            if started_transaction:
+                self.cnx.commit()
+            logger.info("Productos nuevos insertados en Productos: %s", len(faltantes))
+            return len(faltantes)
+
+        except Exception as e:
+            if self.cnx.in_transaction:
+                self.cnx.rollback()
+            logger.error(f"Error al asegurar productos desde PickListDetalle: {e}")
             raise
 
     def cerrar_conexion(self):

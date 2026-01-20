@@ -10,8 +10,6 @@ def insertar_picklist(cursor, data):
     VALUES
         (%s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
-        Cliente     = %s,
-        TiendaTOTVS = %s,
         PickListID  = LAST_INSERT_ID(PickListID)
     """
     args = (
@@ -19,9 +17,7 @@ def insertar_picklist(cursor, data):
         data['deposito'],
         data['pedido'],
         data['nombre'],
-        data['tienda'],
-        data['nombre'],    # UPDATE (repetidos)
-        data['tienda'],
+        data['tienda']
     )
     cursor.execute(sql, args)
     return cursor.lastrowid  # sirve tanto en insert como en duplicado
@@ -33,9 +29,9 @@ def insertar_picklist_detalle(cursor, picklist_id, data):
 
     sql = """
     INSERT INTO PickListDetalle
-        (PickListID, ProductoID, ProductoDescripcion, CantidadRequerida, UbicacionTotvs, Recolectado, CantidadSurtida)
+        (PickListID, ProductoID, ProductoDescripcion, CantidadRequerida, UbicacionTotvs, Recolectado, CantidadSurtida, Item, Tienda, TiendaTOTVS)
     VALUES
-        (%s, %s, %s, %s, %s, %s, %s)
+        (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
         PickListDetalleID = PickListDetalleID
     """
@@ -47,6 +43,9 @@ def insertar_picklist_detalle(cursor, picklist_id, data):
         ubic,
         0,  # Recolectado siempre inicia en 0
         0,  # CantidadSurtida siempre inicia en 0
+        data.get('item'),
+        (data.get('cliente') or '').strip() + '-' + (data.get('tienda') or '').strip(),
+        data.get('tienda'),
 
     )
     cursor.execute(sql, args)
@@ -165,6 +164,77 @@ def mapear_ubicacionid_en_picklistdetalle(cursor):
         WHERE d.ProductoID IS NOT NULL
           AND d.UbicacionTotvs IS NOT NULL
           AND TRIM(d.UbicacionTotvs) <> ''
+    """
+    try:
+        cursor.execute(sql)
+        filas = cursor.rowcount
+        logger.info("PickListDetalle.UbicacionID mapeado desde ProductosUbicacion. Filas afectadas: %s", filas)
+        return filas
+    except mysql.connector.Error:
+        logger.exception("Error mapeando UbicacionID en PickListDetalle")
+        raise
+
+
+def asegurar_cliente_tienda(cursor, cliente_id, tienda_id):
+    """
+    Garantiza que exista el Cliente y la Tienda asociados al registro de PickList.
+    Inserta los faltantes con datos mínimos usando la misma lógica que se usa en otras operaciones.
+    """
+    cliente = (cliente_id or "").strip()
+    tienda = (tienda_id or "").strip()
+
+    try:
+        if cliente:
+            sql_cliente = """
+                INSERT INTO Clientes (ClienteID, ClienteNombre)
+                SELECT %s, %s
+                FROM DUAL
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM Clientes c WHERE c.ClienteID = %s
+                )
+            """
+            cursor.execute(sql_cliente, (cliente, cliente, cliente))
+            if cursor.rowcount == 1:
+                logger.info("Cliente creado automáticamente: %s", cliente)
+
+        if cliente and tienda:
+            sql_tienda = """
+                INSERT INTO Tienda (ClienteID, TiendaID, DestinoNombre)
+                SELECT %s, %s, %s
+                FROM DUAL
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM Tienda t
+                    WHERE t.ClienteID = %s AND t.TiendaID = %s
+                )
+            """
+            cursor.execute(sql_tienda, (cliente, tienda, tienda, cliente, tienda))
+            if cursor.rowcount == 1:
+                logger.info("Tienda creada automáticamente: Cliente=%s, Tienda=%s", cliente, tienda)
+    except mysql.connector.Error:
+        logger.exception("Error al asegurar Cliente/Tienda (Cliente=%s, Tienda=%s)", cliente, tienda)
+        raise
+
+def cargarPicklistDetalle(cursor):
+    """
+    Actualiza en bloque PickListDetalle.UbicacionID buscando el match en ProductosUbicacion
+    por (ProductoID, UbicacionTotvs ~ UbicacionID). Solo actualiza filas donde UbicacionID
+    está NULL o vacío. Devuelve la cantidad de filas afectadas.
+
+    Emparejamiento case-insensitive y sin espacios al borde:
+      UPPER(TRIM(PickListDetalle.UbicacionTotvs)) = UPPER(TRIM(ProductosUbicacion.UbicacionID))
+
+    Requisitos recomendados de índice:
+      - ProductosUbicacion: UNIQUE(ProductoID, UbicacionID)
+      - PickListDetalle:   INDEX (ProductoID, UbicacionTotvs)
+    """
+    sql = """
+        UPDATE PickListDetalle D
+        JOIN PickList P ON D.PickListID = P.PickListID
+        SET
+        D.Pedido = P.Pedido,
+        D.ClienteID = P.ClienteID,
+        D.TiendaTOTVS = P.Tienda;
     """
     try:
         cursor.execute(sql)
