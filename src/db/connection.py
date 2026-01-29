@@ -19,7 +19,7 @@ def get_db_connection():
             host=settings.DB_HOST,
             port=settings.DB_PORT,
             database=settings.DB_DATABASE,
-            raise_on_warnings=True
+            raise_on_warnings=False
         )
         logger.info("Conexión a la base de datos establecida exitosamente.")
         return cnx

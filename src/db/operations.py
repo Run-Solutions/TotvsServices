@@ -92,6 +92,15 @@ def insertar_producto_ubicacion(cursor, data: dict):
             logger.info("INSERT IGNORE: ya existía ProductosUbicacion (ProductoID=%s, UbicacionID=%s) -> omitido",
                         data.get("ProductoID"), data.get("UbicacionID"))
 
+    except mysql.connector.IntegrityError as err:
+    if err.errno == 1062:
+        logger.warning(
+            "Duplicado detectado y omitido (ProductoID=%s, UbicacionID=%s)",
+            data.get("ProductoID"), data.get("UbicacionID")
+        )
+    else:
+        raise
+
     except mysql.connector.Error as err:
         logger.exception("Error al insertar en ProductosUbicacion")
         raise  
