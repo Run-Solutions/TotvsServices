@@ -1,16 +1,18 @@
 # src/api/client.py
 import json as _json
 import requests
-from requests.auth import HTTPBasicAuth
+# from requests.auth import HTTPBasicAuth  # Removed BasicAuth
 from urllib.parse import urljoin
 from config.settings import settings
 from utils.logger import logger
+from .auth import OAuth2Manager 
 
 class APIClient:
     def __init__(self):
         self.url_rym0501 = settings.API_URL          # p.ej. https://.../rest/RYM0501
         self.url_proubi  = settings.API_URL_PROUBI   # p.ej. https://.../rest/RYM0503
-        self.auth = HTTPBasicAuth(settings.API_USERNAME, settings.API_PASSWORD)
+        # self.auth = HTTPBasicAuth(settings.API_USERNAME, settings.API_PASSWORD) # Removed
+        self.oauth_manager = OAuth2Manager() # Added OAuth Manager
         self.timeout = 60
         self.verify_ssl = True
 
@@ -18,6 +20,15 @@ class APIClient:
         h = {"Accept": "application/json"}
         if json_body is not None:
             h["Content-Type"] = "application/json"
+        
+        # Add Authorization header
+        try:
+            token = self.oauth_manager.get_token()
+            h["Authorization"] = f"Bearer {token}"
+        except Exception as e:
+            logger.error(f"Failed to get OAuth token: {e}")
+            return None
+
         if headers:
             h.update(headers)
 
@@ -25,7 +36,7 @@ class APIClient:
             resp = requests.request(
                 method="GET",
                 url=url,
-                auth=self.auth,
+                # auth=self.auth, # Removed
                 params=params,
                 data=_json.dumps(json_body) if json_body is not None else None,
                 headers=h,

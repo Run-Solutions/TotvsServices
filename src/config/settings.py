@@ -12,6 +12,9 @@ class Settings:
     API_URL_PROUBI = os.getenv('API_URL_PROUBI')
     API_USERNAME = os.getenv('API_USERNAME')
     API_PASSWORD = os.getenv('API_PASSWORD')
+    API_CONSUMER_KEY = os.getenv('API_CONSUMER_KEY')
+    API_CONSUMER_SECRET = os.getenv('API_CONSUMER_SECRET')
+    API_TOKEN_URL = os.getenv('API_TOKEN_URL')
     
     # Configuración de la Base de Datos
     DB_USER = os.getenv('DB_USER')
