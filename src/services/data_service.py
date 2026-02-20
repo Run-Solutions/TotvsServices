@@ -6,6 +6,7 @@ from db.operations import (
     mapear_ubicacionid_en_picklistdetalle,
     cargarPicklistDetalle,
     asegurar_cliente_tienda,
+    asegurar_producto_en_catalogo,
 )
 from utils.logger import logger
 from utils.helpers import validate_data
@@ -79,20 +80,21 @@ class DataService:
                 return
 
             # 2) Agrupar por (pedido, tienda, cliente, deposito)
+            # NOTA: 'item' es un campo de DETALLE, no forma parte del encabezado PickList
             grupos = {}
             for r in validos:
-                key = (r['pedido'], r['tienda'], r['cliente'], r['deposito'], r['item'])
+                key = (r['pedido'], r['tienda'], r['cliente'], r['deposito'])
                 grupos.setdefault(key, []).append(r)
 
-            logger.info("Total grupos (pedido, tienda, cliente, deposito, item): %s", len(grupos))
+            logger.info("Total grupos (pedido, tienda, cliente, deposito): %s", len(grupos))
 
             afectados_ids = set()
             total_detalles_intentados = 0
 
             # 3) Insertar/recuperar PickList por grupo y luego TODOS sus detalles
-            for (pedido, tienda, cliente, deposito, item), registros in grupos.items():
-                logger.info("Procesando grupo: pedido=%s, tienda=%s, cliente=%s, deposito=%s, item=%s",
-                            pedido, tienda, cliente, deposito, item)
+            for (pedido, tienda, cliente, deposito), registros in grupos.items():
+                logger.info("Procesando grupo: pedido=%s, tienda=%s, cliente=%s, deposito=%s | items: %s",
+                            pedido, tienda, cliente, deposito, len(registros))
                 asegurar_cliente_tienda(self.cursor, cliente, tienda)
                 header = {
                     'cliente':  cliente,
@@ -100,7 +102,6 @@ class DataService:
                     'pedido':   pedido,
                     'nombre':   registros[0].get('nombre', ''),
                     'tienda':   tienda,
-                    'item':     item
                 }
 
                 # insertar_picklist devuelve SOLO el ID
@@ -108,6 +109,13 @@ class DataService:
                 afectados_ids.add(pid)
 
                 for det in registros:
+                    # ⚠️ IMPORTANTE: asegurar producto en catálogo ANTES del detalle
+                    # para no violar el FK PickListDetalle → Productos
+                    asegurar_producto_en_catalogo(
+                        self.cursor,
+                        det.get('producto'),
+                        det.get('descripcion')
+                    )
                     insertar_picklist_detalle(self.cursor, pid, det)
                     total_detalles_intentados += 1
 

@@ -6,18 +6,17 @@ import mysql.connector
 def insertar_picklist(cursor, data):
     sql = """
     INSERT INTO PickList
-        (ClienteID, Deposito, Pedido, Cliente, TiendaTOTVS)
+        (ClienteID, Pedido, Cliente, Tienda)
     VALUES
-        (%s, %s, %s, %s, %s)
+        (%s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
-        PickListID  = LAST_INSERT_ID(PickListID)
+        PickListID = LAST_INSERT_ID(PickListID)
     """
     args = (
-        data['cliente'],   # INSERT
-        data['deposito'],
-        data['pedido'],
-        data['nombre'],
-        data['tienda']
+        data['cliente'],   # ClienteID
+        data['pedido'],    # Pedido
+        data['nombre'],    # Cliente
+        data['tienda'],    # Tienda
     )
     cursor.execute(sql, args)
     return cursor.lastrowid  # sirve tanto en insert como en duplicado
@@ -26,35 +25,67 @@ def insertar_picklist(cursor, data):
 
 def insertar_picklist_detalle(cursor, picklist_id, data):
     ubic = (data.get('ubicacion') or '').strip().upper()
+    prod = (data.get('producto') or '').strip()
+    item = data.get('item')
+
+    logger.info(
+        "Intentando insertar detalle → PL=%s | Item=%s | Producto=%s | Ubicacion=%s | Cantidad=%s",
+        picklist_id, item, prod, ubic, data.get('cantidad_liberada')
+    )
 
     sql = """
     INSERT INTO PickListDetalle
-        (PickListID, ProductoID, ProductoDescripcion, CantidadRequerida, UbicacionTotvs, Recolectado, CantidadSurtida, Item, Tienda, TiendaTOTVS)
+        (PickListID, ProductoID, CantidadRequerida, UbicacionTotvs, Recolectado, CantidadSurtida, Item, TiendaTOTVS)
     VALUES
-        (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        (%s, %s, %s, %s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
-        PickListDetalleID = PickListDetalleID
+        CantidadRequerida = VALUES(CantidadRequerida),
+        UbicacionTotvs    = VALUES(UbicacionTotvs)
     """
     args = (
         picklist_id,
-        data.get('producto'),
-        data.get('descripcion'),
+        prod,
         data.get('cantidad_liberada'),
         ubic,
         0,  # Recolectado siempre inicia en 0
         0,  # CantidadSurtida siempre inicia en 0
-        data.get('item'),
-        (data.get('cliente') or '').strip() + '-' + (data.get('tienda') or '').strip(),
+        item,
         data.get('tienda'),
-
     )
     cursor.execute(sql, args)
 
     if cursor.rowcount == 1:
-        logger.info("Insertado PickListDetalleID=%s", cursor.lastrowid)
+        logger.info("✅ INSERTADO nuevo detalle → PickListDetalleID=%s (PL=%s, Item=%s, Prod=%s)",
+                    cursor.lastrowid, picklist_id, item, prod)
+    elif cursor.rowcount == 2:
+        logger.info("♻️  ACTUALIZADO detalle existente (PL=%s, Item=%s, Prod=%s)",
+                    picklist_id, item, prod)
     else:
-        logger.info("Detalle duplicado OMITIDO (PL=%s, Prod=%s, Ub=%s)",
-                    picklist_id, data.get('producto'), ubic)
+        logger.warning("⚠️  DUPLICADO sin cambios (PL=%s, Item=%s, Prod=%s) — verifica UNIQUE constraint en tabla",
+                       picklist_id, item, prod)
+
+
+def asegurar_producto_en_catalogo(cursor, producto_id: str, descripcion: str = ""):
+    """
+    Inserta el producto en la tabla Productos si no existe todavía.
+    Esto es OBLIGATORIO antes de insertar en PickListDetalle por el FK constraint
+    que referencia Productos(ProductoID).
+    """
+    prod = (producto_id or "").strip()
+    if not prod:
+        return
+    desc = (descripcion or "").strip() or prod
+    sql = """
+        INSERT INTO Productos (ProductoID, ProductoDescripcion)
+        VALUES (%s, %s)
+        ON DUPLICATE KEY UPDATE ProductoID = ProductoID
+    """
+    try:
+        cursor.execute(sql, (prod, desc))
+        if cursor.rowcount == 1:
+            logger.info("Producto nuevo en catálogo: %s", prod)
+    except mysql.connector.Error as err:
+        logger.warning("No se pudo asegurar producto %s en catálogo: %s", prod, err)
 
 
 def insertar_producto_ubicacion(cursor, data: dict):
@@ -66,20 +97,15 @@ def insertar_producto_ubicacion(cursor, data: dict):
     try:
         sql = """
         INSERT IGNORE INTO ProductosUbicacion
-            (ProductoID, ProductoDescripcion, UbicacionID, AnaquelID, Stock, StockMinimo, SYNC, SYNCUsuario, tmpSwap)
+            (ProductoID, UbicacionID, AnaquelID, Stock)
         VALUES
-            (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (%s, %s, %s, %s)
         """
         args = (
             data.get("ProductoID"),
-            data.get("ProductoDescripcion"),
             data.get("UbicacionID"),
             data.get("AnaquelID"),
-            data.get("Stock"),
-            data.get("StockMinimo"),
-            data.get("SYNC"),
-            data.get("SYNCUsuario"),
-            data.get("tmpSwap"),
+            data.get("Stock")
         )
         cursor.execute(sql, args)
 
@@ -126,9 +152,7 @@ def actualizar_detalle_desde_picklist(cursor, picklist_ids=None):
                 JOIN PickList P ON D.PickListID = P.PickListID
                 SET
                   D.Pedido      = P.Pedido,
-                  D.ClienteID   = P.ClienteID,
-                  D.TiendaTOTVS = P.TiendaTOTVS,
-                  D.Tienda = CONCAT(P.ClienteID, '-', P.TiendaTOTVS)
+                  D.TiendaTOTVS = P.Tienda
                 WHERE D.PickListID IN ({placeholders})
             """
             cursor.execute(sql, tuple(picklist_ids))
@@ -138,10 +162,7 @@ def actualizar_detalle_desde_picklist(cursor, picklist_ids=None):
                 JOIN PickList P ON D.PickListID = P.PickListID
                 SET
                   D.Pedido      = P.Pedido,
-                  D.ClienteID   = P.ClienteID,
-                  D.TiendaTOTVS = P.TiendaTOTVS,
-                  D.Tienda = CONCAT(P.ClienteID, '-', P.TiendaTOTVS)
-
+                  D.TiendaTOTVS = P.Tienda
             """
             cursor.execute(sql)
 
@@ -241,9 +262,8 @@ def cargarPicklistDetalle(cursor):
         UPDATE PickListDetalle D
         JOIN PickList P ON D.PickListID = P.PickListID
         SET
-        D.Pedido = P.Pedido,
-        D.ClienteID = P.ClienteID,
-        D.TiendaTOTVS = P.Tienda;
+            D.Pedido      = P.Pedido,
+            D.TiendaTOTVS = P.Tienda;
     """
     try:
         cursor.execute(sql)
