@@ -150,9 +150,9 @@ class DataService:
             consulta_faltantes = """
                 SELECT DISTINCT
                     TRIM(d.ProductoID) AS ProductoID,
-                    COALESCE(NULLIF(TRIM(d.ProductoDescripcion), ''), TRIM(d.ProductoID)) AS ProductoDescripcion
+                    TRIM(d.ProductoID) AS ProductoDescripcion
                 FROM PickListDetalle d
-                LEFT JOIN Productos p ON p.ProductoID = d.ProductoID
+                LEFT JOIN Productos p ON p.ProductoID = TRIM(d.ProductoID)
                 WHERE d.ProductoID IS NOT NULL
                   AND TRIM(d.ProductoID) <> ''
                   AND p.ProductoID IS NULL

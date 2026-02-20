@@ -6,9 +6,9 @@ import mysql.connector
 def insertar_picklist(cursor, data):
     sql = """
     INSERT INTO PickList
-        (ClienteID, Pedido, Cliente, Tienda)
+        (ClienteID, Pedido, Cliente, Tienda, TiendaTOTVS)
     VALUES
-        (%s, %s, %s, %s)
+        (%s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
         PickListID = LAST_INSERT_ID(PickListID)
     """
@@ -17,6 +17,7 @@ def insertar_picklist(cursor, data):
         data['pedido'],    # Pedido
         data['nombre'],    # Cliente
         data['tienda'],    # Tienda
+        data['tienda'],    # TiendaTOTVS (mismo valor, requerido por el trigger)
     )
     cursor.execute(sql, args)
     return cursor.lastrowid  # sirve tanto en insert como en duplicado
