@@ -29,41 +29,36 @@ def insertar_picklist_detalle(cursor, picklist_id, data):
     prod = (data.get('producto') or '').strip()
     item = data.get('item')
 
-    logger.info(
-        "Intentando insertar detalle → PL=%s | Item=%s | Producto=%s | Ubicacion=%s | Cantidad=%s",
-        picklist_id, item, prod, ubic, data.get('cantidad_liberada')
-    )
+    oc = (data.get('oc') or '').strip()
+    precio = data.get('precio')
 
     sql = """
     INSERT INTO PickListDetalle
-        (PickListID, ProductoID, CantidadRequerida, UbicacionTotvs, Recolectado, CantidadSurtida, Item, TiendaTOTVS)
+        (PickListID, ProductoID, CantidadRequerida, UbicacionTotvs,
+         Recolectado, CantidadSurtida, Item, TiendaTOTVS, OC, Precio)
     VALUES
-        (%s, %s, %s, %s, %s, %s, %s, %s)
+        (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
         CantidadRequerida = VALUES(CantidadRequerida),
-        UbicacionTotvs    = VALUES(UbicacionTotvs)
+        UbicacionTotvs    = VALUES(UbicacionTotvs),
+        OC                = VALUES(OC),
+        Precio            = VALUES(Precio)
     """
+
     args = (
         picklist_id,
         prod,
         data.get('cantidad_liberada'),
         ubic,
-        0,  # Recolectado siempre inicia en 0
-        0,  # CantidadSurtida siempre inicia en 0
+        0,
+        0,
         item,
         data.get('tienda'),
+        oc,
+        precio
     )
-    cursor.execute(sql, args)
 
-    if cursor.rowcount == 1:
-        logger.info("✅ INSERTADO nuevo detalle → PickListDetalleID=%s (PL=%s, Item=%s, Prod=%s)",
-                    cursor.lastrowid, picklist_id, item, prod)
-    elif cursor.rowcount == 2:
-        logger.info("♻️  ACTUALIZADO detalle existente (PL=%s, Item=%s, Prod=%s)",
-                    picklist_id, item, prod)
-    else:
-        logger.warning("⚠️  DUPLICADO sin cambios (PL=%s, Item=%s, Prod=%s) — verifica UNIQUE constraint en tabla",
-                       picklist_id, item, prod)
+    cursor.execute(sql, args)
 
 
 def asegurar_producto_en_catalogo(cursor, producto_id: str, descripcion: str = ""):

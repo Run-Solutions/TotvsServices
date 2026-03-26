@@ -47,20 +47,32 @@ class DataService:
         def _s(x):
             return x.strip() if isinstance(x, str) else x
 
-        def _sanitize(r: dict) -> dict:
-            rr = dict(r)
-            rr['pedido']   = _s(rr.get('pedido', ''))
-            rr['tienda']   = _s(rr.get('tienda', ''))
-            rr['cliente']  = _s(rr.get('cliente', ''))
-            rr['deposito'] = _s(rr.get('deposito', ''))
-            rr['producto'] = _s(rr.get('producto', ''))
-            rr['ubicacion']= _s(rr.get('ubicacion', ''))
-            rr['nombre']   = _s(rr.get('nombre', ''))
-            it = rr.get('item')
-            if it is not None:
-                it_s = _s(str(it))
-                rr['item'] = int(it_s) if it_s and it_s.isdigit() else it_s
-            return rr
+    def _sanitize(r: dict) -> dict:
+        rr = dict(r)
+
+        rr['pedido']   = _s(rr.get('pedido', ''))
+        rr['tienda']   = _s(rr.get('tienda', ''))
+        rr['cliente']  = _s(rr.get('cliente', ''))
+        rr['deposito'] = _s(rr.get('deposito', ''))
+        rr['producto'] = _s(rr.get('producto', ''))
+        rr['ubicacion']= _s(rr.get('ubicacion', ''))
+        rr['nombre']   = _s(rr.get('nombre', ''))
+
+        # 👇 
+        rr['oc'] = _s(rr.get('oc', ''))
+
+        precio = rr.get('precio')
+        try:
+            rr['precio'] = float(precio) if precio is not None else None
+        except:
+            rr['precio'] = None
+
+        it = rr.get('item')
+        if it is not None:
+            it_s = _s(str(it))
+            rr['item'] = int(it_s) if it_s and it_s.isdigit() else it_s
+
+        return rr
 
         try:
             if not self.cnx.in_transaction:
