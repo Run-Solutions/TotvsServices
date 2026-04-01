@@ -60,6 +60,20 @@ def insertar_picklist_detalle(cursor, picklist_id, data):
 
     cursor.execute(sql, args)
 
+    # 👇 AGREGA ESTO
+    if cursor.rowcount == 1:
+        logger.info(
+            f"✅ INSERTADO (PL={picklist_id}, Item={item}, Prod={prod})"
+        )
+    elif cursor.rowcount == 2:
+        logger.info(
+            f"♻️ ACTUALIZADO (PL={picklist_id}, Item={item}, Prod={prod})"
+        )
+    else:
+        logger.warning(
+            f"⚠️ SIN CAMBIOS (PL={picklist_id}, Item={item}, Prod={prod})"
+        )
+
 
 def asegurar_producto_en_catalogo(cursor, producto_id: str, descripcion: str = ""):
     """
