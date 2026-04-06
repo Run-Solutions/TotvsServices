@@ -12,7 +12,8 @@ def main():
         return
 
     # 2) Con picklist arma y consulta PROUBI para ProductosUbicacion
-    productos_ubi = api_service.obtener_productos_ubicacion_batch(picklist)
+    # productos_ubi = api_service.obtener_productos_ubicacion_batch(picklist)
+    productos_ubi = []
 
     data_service = DataService()
     try:

@@ -1,4 +1,5 @@
 # src/api/api_services.py
+import json
 from api.client import APIClient
 from utils.logger import logger
 
@@ -32,6 +33,8 @@ class APIService:
             return []
 
         logger.info("PickList: %s registros.", len(data))
+        with open("picklist_response.json", "w") as f:
+            json.dump(data, f, indent=4)
         return data
 
     # 2) Construye el body para PROUBI (RYM0503) a partir de un registro del PickList

@@ -47,32 +47,28 @@ class DataService:
         def _s(x):
             return x.strip() if isinstance(x, str) else x
 
-    def _sanitize(r: dict) -> dict:
-        rr = dict(r)
+        def _sanitize(r: dict) -> dict:
+            rr = dict(r)
+            rr['pedido']   = _s(rr.get('pedido', ''))
+            rr['tienda']   = _s(rr.get('tienda', ''))
+            rr['cliente']  = _s(rr.get('cliente', ''))
+            rr['deposito'] = _s(rr.get('deposito', ''))
+            rr['producto'] = _s(rr.get('producto', ''))
+            rr['ubicacion']= _s(rr.get('ubicacion', ''))
+            rr['nombre']   = _s(rr.get('nombre', ''))
+            rr['oc'] = _s(rr.get('oc', ''))
 
-        rr['pedido']   = _s(rr.get('pedido', ''))
-        rr['tienda']   = _s(rr.get('tienda', ''))
-        rr['cliente']  = _s(rr.get('cliente', ''))
-        rr['deposito'] = _s(rr.get('deposito', ''))
-        rr['producto'] = _s(rr.get('producto', ''))
-        rr['ubicacion']= _s(rr.get('ubicacion', ''))
-        rr['nombre']   = _s(rr.get('nombre', ''))
+            precio = rr.get('precio')
+            try:
+                rr['precio'] = float(precio) if precio is not None else None
+            except:
+                rr['precio'] = None
 
-        # 👇 
-        rr['oc'] = _s(rr.get('oc', ''))
-
-        precio = rr.get('precio')
-        try:
-            rr['precio'] = float(precio) if precio is not None else None
-        except:
-            rr['precio'] = None
-
-        it = rr.get('item')
-        if it is not None:
-            it_s = _s(str(it))
-            rr['item'] = int(it_s) if it_s and it_s.isdigit() else it_s
-
-        return rr
+            it = rr.get('item')
+            if it is not None:
+                it_s = _s(str(it))
+                rr['item'] = int(it_s) if it_s and it_s.isdigit() else it_s
+            return rr
 
         try:
             if not self.cnx.in_transaction:
@@ -92,7 +88,6 @@ class DataService:
                 return
 
             # 2) Agrupar por (pedido, tienda, cliente, deposito)
-            # NOTA: 'item' es un campo de DETALLE, no forma parte del encabezado PickList
             grupos = {}
             for r in validos:
                 key = (r['pedido'], r['tienda'], r['cliente'], r['deposito'])
@@ -121,8 +116,7 @@ class DataService:
                 afectados_ids.add(pid)
 
                 for det in registros:
-                    # ⚠️ IMPORTANTE: asegurar producto en catálogo ANTES del detalle
-                    # para no violar el FK PickListDetalle → Productos
+                    # Asegurar producto en catálogo ANTES del detalle
                     asegurar_producto_en_catalogo(
                         self.cursor,
                         det.get('producto'),
@@ -135,6 +129,7 @@ class DataService:
             if afectados_ids:
                 from db.operations import actualizar_detalle_desde_picklist
                 actualizar_detalle_desde_picklist(self.cursor, list(afectados_ids))
+            
             cargarPicklistDetalle(self.cursor)
             self.cnx.commit()
             logger.info(
