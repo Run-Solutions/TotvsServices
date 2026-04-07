@@ -33,16 +33,11 @@ def insertar_picklist_detalle(cursor, picklist_id, data):
     precio = data.get('precio')
 
     sql = """
-    INSERT INTO PickListDetalle
+    INSERT IGNORE INTO PickListDetalle
         (PickListID, ProductoID, CantidadRequerida, UbicacionTotvs,
          Recolectado, CantidadSurtida, Item, TiendaTOTVS, OC, Precio)
     VALUES
         (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    ON DUPLICATE KEY UPDATE
-        CantidadRequerida = VALUES(CantidadRequerida),
-        UbicacionTotvs    = VALUES(UbicacionTotvs),
-        OC                = VALUES(OC),
-        Precio            = VALUES(Precio)
     """
 
     args = (
@@ -60,19 +55,10 @@ def insertar_picklist_detalle(cursor, picklist_id, data):
 
     cursor.execute(sql, args)
 
-    # 👇 AGREGA ESTO
     if cursor.rowcount == 1:
-        logger.info(
-            f"✅ INSERTADO (PL={picklist_id}, Item={item}, Prod={prod})"
-        )
-    elif cursor.rowcount == 2:
-        logger.info(
-            f"♻️ ACTUALIZADO (PL={picklist_id}, Item={item}, Prod={prod})"
-        )
+        logger.info(f"✅ NUEVO (PL={picklist_id}, Item={item}, Prod={prod})")
     else:
-        logger.warning(
-            f"⚠️ SIN CAMBIOS (PL={picklist_id}, Item={item}, Prod={prod})"
-        )
+        logger.info(f"⏭️ EXISTENTE - OMITIDO (PL={picklist_id}, Item={item}, Prod={prod})")
 
 
 def asegurar_producto_en_catalogo(cursor, producto_id: str, descripcion: str = ""):
@@ -164,6 +150,7 @@ def actualizar_detalle_desde_picklist(cursor, picklist_ids=None):
                   D.Pedido      = P.Pedido,
                   D.TiendaTOTVS = P.Tienda
                 WHERE D.PickListID IN ({placeholders})
+                  AND (D.Pedido IS NULL OR D.Pedido = '')
             """
             cursor.execute(sql, tuple(picklist_ids))
         else:
@@ -173,6 +160,7 @@ def actualizar_detalle_desde_picklist(cursor, picklist_ids=None):
                 SET
                   D.Pedido      = P.Pedido,
                   D.TiendaTOTVS = P.Tienda
+                WHERE D.Pedido IS NULL OR D.Pedido = ''
             """
             cursor.execute(sql)
 
@@ -204,11 +192,12 @@ def mapear_ubicacionid_en_picklistdetalle(cursor):
         WHERE d.ProductoID IS NOT NULL
           AND d.UbicacionTotvs IS NOT NULL
           AND TRIM(d.UbicacionTotvs) <> ''
+          AND (d.UbicacionID IS NULL OR d.UbicacionID = 0)
     """
     try:
         cursor.execute(sql)
         filas = cursor.rowcount
-        logger.info("PickListDetalle.UbicacionID mapeado desde ProductosUbicacion. Filas afectadas: %s", filas)
+        logger.info("Vínculo UbicacionID -> PickListDetalle completado. Filas actualizadas: %s", filas)
         return filas
     except mysql.connector.Error:
         logger.exception("Error mapeando UbicacionID en PickListDetalle")
@@ -255,31 +244,4 @@ def asegurar_cliente_tienda(cursor, cliente_id, tienda_id):
         logger.exception("Error al asegurar Cliente/Tienda (Cliente=%s, Tienda=%s)", cliente, tienda)
         raise
 
-def cargarPicklistDetalle(cursor):
-    """
-    Actualiza en bloque PickListDetalle.UbicacionID buscando el match en ProductosUbicacion
-    por (ProductoID, UbicacionTotvs ~ UbicacionID). Solo actualiza filas donde UbicacionID
-    está NULL o vacío. Devuelve la cantidad de filas afectadas.
-
-    Emparejamiento case-insensitive y sin espacios al borde:
-      UPPER(TRIM(PickListDetalle.UbicacionTotvs)) = UPPER(TRIM(ProductosUbicacion.UbicacionID))
-
-    Requisitos recomendados de índice:
-      - ProductosUbicacion: UNIQUE(ProductoID, UbicacionID)
-      - PickListDetalle:   INDEX (ProductoID, UbicacionTotvs)
-    """
-    sql = """
-        UPDATE PickListDetalle D
-        JOIN PickList P ON D.PickListID = P.PickListID
-        SET
-            D.Pedido      = P.Pedido,
-            D.TiendaTOTVS = P.Tienda;
-    """
-    try:
-        cursor.execute(sql)
-        filas = cursor.rowcount
-        logger.info("PickListDetalle.UbicacionID mapeado desde ProductosUbicacion. Filas afectadas: %s", filas)
-        return filas
-    except mysql.connector.Error:
-        logger.exception("Error mapeando UbicacionID en PickListDetalle")
-        raise
+# La función cargarPicklistDetalle fue eliminada por redundancia y log erróneo.

@@ -4,7 +4,6 @@ from db.operations import (
     insertar_picklist_detalle,
     insertar_producto_ubicacion,
     mapear_ubicacionid_en_picklistdetalle,
-    cargarPicklistDetalle,
     asegurar_cliente_tienda,
     asegurar_producto_en_catalogo,
 )
@@ -125,12 +124,12 @@ class DataService:
                     insertar_picklist_detalle(self.cursor, pid, det)
                     total_detalles_intentados += 1
 
-            # 4) Sincronizar campos espejo en detalle (opcional)
+            # 4) Sincronizar campos y mapear Ubicación
             if afectados_ids:
-                from db.operations import actualizar_detalle_desde_picklist
+                from db.operations import actualizar_detalle_desde_picklist, mapear_ubicacionid_en_picklistdetalle
                 actualizar_detalle_desde_picklist(self.cursor, list(afectados_ids))
+                mapear_ubicacionid_en_picklistdetalle(self.cursor)
             
-            cargarPicklistDetalle(self.cursor)
             self.cnx.commit()
             logger.info(
                 "Grupos procesados: %s | Detalles procesados (insertados/omitidos por UNIQUE): %s",
