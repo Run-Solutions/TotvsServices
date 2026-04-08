@@ -119,57 +119,75 @@ def conectar_base_datos():
 # =========================
 def insertar_picklist(cursor, data):
     """
-    Inserta o reaprovecha un PickList único por Tienda (normalizada).
-    Requiere UNIQUE en PickList(TiendaNorm).
-    Retorna (picklist_id, is_new).
+    Inserta o reaprovecha un PickList único por Tienda, Cliente y Pedido.
     """
     sql = """
-    INSERT INTO PickList (ClienteID, Deposito, Pedido, Cliente, Tienda)
-    VALUES (%s, %s, %s, %s, %s) AS new
+    INSERT INTO PickList (ClienteID, Pedido, Cliente, Tienda, TiendaTOTVS, PickListFecha)
+    VALUES (%s, %s, %s, %s, %s, NOW()) AS new
     ON DUPLICATE KEY UPDATE
         Cliente        = COALESCE(new.Cliente,        PickList.Cliente),
-        Deposito       = COALESCE(new.Deposito,       PickList.Deposito),
-        Pedido         = COALESCE(new.Pedido,         PickList.Pedido),
-        Tienda         = COALESCE(new.Tienda,         PickList.Tienda),
         PickListID     = LAST_INSERT_ID(PickList.PickListID)
     """
+    tienda = _clean_str(data.get('tienda'))
     args = (
         data.get('cliente'),
-        data.get('deposito'),
         data.get('pedido'),
         data.get('nombre'),
-        data.get('tienda'),
+        tienda,
+        tienda, # TiendaTOTVS
     )
     cursor.execute(sql, args)
     picklist_id = cursor.lastrowid
-    is_new = (cursor.rowcount == 1)  # 1=insert nuevo, 2=update por duplicado
-    logging.info("PickListID=%s | nuevo=%s | tienda=%s", picklist_id, is_new, (data.get('tienda') or '').strip())
+    is_new = (cursor.rowcount == 1)
+    logging.info("PickListID=%s | nuevo=%s | tienda=%s", picklist_id, is_new, tienda)
     return picklist_id, is_new
+
+
+def asegurar_producto(cursor, producto_id):
+    """
+    Se asegura de que el producto exista en la tabla Productos para evitar errores de FK.
+    """
+    prod = _clean_str(producto_id)
+    if not prod:
+        return
+    sql = """
+        INSERT INTO Productos (ProductoID, ProductoDescripcion)
+        VALUES (%s, %s)
+        ON DUPLICATE KEY UPDATE ProductoID = ProductoID
+    """
+    cursor.execute(sql, (prod, prod))
 
 
 def insertar_picklist_detalle(cursor, picklist_id, data):
     """
     Inserta un registro en la tabla PickListDetalle.
-    Se recomienda que PickListDetalle tenga columnas:
-    - PickListID (FK), ProductoID, ProductoDescripcion, CantidadRequerida, UbicacionTotvs
-    - y opcionalmente: Pedido, ClienteID, Tienda (que se llenarán con actualizar_detalle_desde_picklist)
     """
+    # Primero aseguramos que el producto exista
+    asegurar_producto(cursor, data.get('producto'))
+
     sql = """
-    INSERT INTO PickListDetalle
-        (PickListID, ProductoID, ProductoDescripcion, CantidadRequerida, UbicacionTotvs)
+    INSERT IGNORE INTO PickListDetalle
+        (PickListID, ProductoID, CantidadRequerida, UbicacionTotvs, TiendaTOTVS, Item, OC, Precio)
     VALUES
-        (%s, %s, %s, %s, %s)
+        (%s, %s, %s, %s, %s, %s, %s, %s)
     """
+    tienda = _clean_str(data.get('tienda'))
     detalle_data = (
         picklist_id,
         _clean_str(data.get('producto')),
-        _clean_str(data.get('descripcion')),
         _to_float_or_none(data.get('cantidad_liberada')),
-        _clean_str(data.get('ubicacion')) or None
+        _clean_str(data.get('ubicacion')) or None,
+        tienda,
+        data.get('item'),
+        _clean_str(data.get('oc')),
+        _to_float_or_none(data.get('precio'))
     )
     try:
         cursor.execute(sql, detalle_data)
-        logging.info("Insertado PickListDetalleID=%s (PickListID=%s)", cursor.lastrowid, picklist_id)
+        if cursor.rowcount == 1:
+            logging.info("Insertado PickListDetalleID=%s (PickListID=%s)", cursor.lastrowid, picklist_id)
+        else:
+            logging.info("Detalle ya existía (omitido)")
     except mysql.connector.Error as err:
         logging.error("Error al insertar PickListDetalle: %s", err)
         raise
@@ -177,14 +195,7 @@ def insertar_picklist_detalle(cursor, picklist_id, data):
 
 def actualizar_detalle_desde_picklist(cursor, picklist_ids=None):
     """
-    Copia Pedido, ClienteID y Tienda desde PickList hacia PickListDetalle
-    usando UPDATE ... JOIN por PickListID.
-
-    Si se pasa picklist_ids (lista/tuple), solo actualiza esos PickListID.
-    Requiere que existan las columnas:
-      - PickListDetalle.Pedido, PickListDetalle.ClienteID, PickListDetalle.Tienda
-      - PickList.Pedido, PickList.ClienteID, PickList.Tienda
-    y que PickListDetalle.PickListID tenga índice.
+    Copia Pedido y TiendaTOTVS desde PickList hacia PickListDetalle.
     """
     try:
         if picklist_ids:
@@ -193,10 +204,10 @@ def actualizar_detalle_desde_picklist(cursor, picklist_ids=None):
                 UPDATE PickListDetalle D
                 JOIN PickList P ON D.PickListID = P.PickListID
                 SET
-                  D.Pedido    = P.Pedido,
-                  D.ClienteID = P.ClienteID,
-                  D.Tienda    = P.Tienda
+                  D.Pedido      = P.Pedido,
+                  D.TiendaTOTVS = P.Tienda
                 WHERE D.PickListID IN ({placeholders})
+                  AND (D.Pedido IS NULL OR D.Pedido = '')
             """
             cursor.execute(sql, tuple(picklist_ids))
         else:
@@ -204,9 +215,9 @@ def actualizar_detalle_desde_picklist(cursor, picklist_ids=None):
                 UPDATE PickListDetalle D
                 JOIN PickList P ON D.PickListID = P.PickListID
                 SET
-                  D.Pedido    = P.Pedido,
-                  D.ClienteID = P.ClienteID,
-                  D.Tienda    = P.Tienda
+                  D.Pedido      = P.Pedido,
+                  D.TiendaTOTVS = P.Tienda
+                WHERE D.Pedido IS NULL OR D.Pedido = ''
             """
             cursor.execute(sql)
 
@@ -237,12 +248,12 @@ def procesar_datos(datos, cursor, cnx):
             # Inserta/Upserta maestro
             picklist_id, is_new = insertar_picklist(cursor, registro)
 
-            # Solo si el maestro es nuevo, crea detalle
+            # Siempre intentamos insertar el detalle. 
+            # El "INSERT IGNORE" interno se encargará de omitir si el producto/item ya existe.
+            insertar_picklist_detalle(cursor, picklist_id, registro)
+            
             if is_new:
-                insertar_picklist_detalle(cursor, picklist_id, registro)
                 nuevos_ids.append(picklist_id)
-            else:
-                logging.info("Tienda ya existente; no se crea detalle. PickListID=%s", picklist_id)
 
             # Commit intermedio opcional para lotes largos
             # if idx % CHUNK_SIZE == 0:
