@@ -143,27 +143,28 @@ def insertar_picklist(cursor, data):
     return picklist_id, is_new
 
 
-def asegurar_producto(cursor, producto_id):
+def asegurar_producto(cursor, producto_id, descripcion):
     """
     Se asegura de que el producto exista en la tabla Productos para evitar errores de FK.
     """
     prod = _clean_str(producto_id)
     if not prod:
         return
+    desc = _clean_str(descripcion) or prod
     sql = """
         INSERT INTO Productos (ProductoID, ProductoDescripcion)
-        VALUES (%s, %s)
-        ON DUPLICATE KEY UPDATE ProductoID = ProductoID
+        VALUES (%s, %s) AS new
+        ON DUPLICATE KEY UPDATE ProductoDescripcion = new.ProductoDescripcion
     """
-    cursor.execute(sql, (prod, prod))
+    cursor.execute(sql, (prod, desc))
 
 
 def insertar_picklist_detalle(cursor, picklist_id, data):
     """
     Inserta un registro en la tabla PickListDetalle.
     """
-    # Primero aseguramos que el producto exista
-    asegurar_producto(cursor, data.get('producto'))
+    # Primero aseguramos que el producto exista con su descripción real
+    asegurar_producto(cursor, data.get('producto'), data.get('descripcion'))
 
     sql = """
     INSERT IGNORE INTO PickListDetalle
