@@ -6,9 +6,9 @@ import mysql.connector
 def insertar_picklist(cursor, data):
     sql = """
     INSERT INTO PickList
-        (ClienteID, Pedido, Cliente, Tienda, TiendaTOTVS)
+        (ClienteID, Pedido, Cliente, Tienda, TiendaTOTVS, PickListFecha)
     VALUES
-        (%s, %s, %s, %s, %s)
+        (%s, %s, %s, %s, %s, NOW())
     ON DUPLICATE KEY UPDATE
         PickListID = LAST_INSERT_ID(PickListID)
     """
