@@ -2,6 +2,7 @@
 
 from utils.logger import logger
 import mysql.connector
+import uuid
 
 def insertar_picklist(cursor, data):
     sql = """
@@ -91,13 +92,14 @@ def insertar_producto_ubicacion(cursor, data: dict):
     try:
         sql = """
         INSERT INTO ProductosUbicacion
-            (ProductoID, UbicacionID, AnaquelID, Stock)
+            (ProductoUbicacionID, ProductoID, UbicacionID, AnaquelID, Stock)
         VALUES
-            (%s, %s, %s, %s)
+            (%s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
             Stock = VALUES(Stock)
         """
         args = (
+            str(uuid.uuid4()),
             data.get("ProductoID"),
             data.get("UbicacionID"),
             data.get("AnaquelID") or "",

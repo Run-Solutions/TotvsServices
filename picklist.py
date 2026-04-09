@@ -7,6 +7,7 @@ from mysql.connector import errorcode
 from datetime import datetime
 import logging
 import os
+import uuid
 from dotenv import load_dotenv
 
 # =========================
@@ -260,12 +261,12 @@ def procesar_datos(datos, cursor, cnx):
             if prod_id and ubic_id:
                 try:
                     sql_ubi = """
-                    INSERT INTO ProductosUbicacion (ProductoID, UbicacionID, Stock)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO ProductosUbicacion (ProductoUbicacionID, ProductoID, UbicacionID, Stock)
+                    VALUES (%s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE Stock = VALUES(Stock)
                     """
                     stock_val = _to_float_or_none(registro.get('cantidad_liberada')) or 0
-                    cursor.execute(sql_ubi, (prod_id, ubic_id, stock_val))
+                    cursor.execute(sql_ubi, (str(uuid.uuid4()), prod_id, ubic_id, stock_val))
                 except mysql.connector.Error as err:
                     logging.warning("No se pudo actualizar stock en ProductosUbicacion: %s", err)
 
