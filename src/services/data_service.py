@@ -129,16 +129,6 @@ class DataService:
                         det.get('descripcion')
                     )
                     
-                    # 3.1) Llenar/Actualizar ProductosUbicacion con stock de la API
-                    # cantidad_liberada -> Stock, ubicacion -> UbicacionID
-                    prod_ubi_data = {
-                        "ProductoID": det.get('producto'),
-                        "UbicacionID": det.get('ubicacion'),
-                        "AnaquelID": det.get('anaquel') or "",
-                        "Stock": det.get('cantidad_liberada') or 0
-                    }
-                    insertar_producto_ubicacion(self.cursor, prod_ubi_data)
-
                     insertar_picklist_detalle(self.cursor, pid, det)
                     total_detalles_intentados += 1
 

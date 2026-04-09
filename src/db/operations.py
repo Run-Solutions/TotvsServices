@@ -186,7 +186,7 @@ def mapear_ubicacionid_en_picklistdetalle(cursor):
         WHERE d.ProductoID IS NOT NULL
           AND d.UbicacionTotvs IS NOT NULL
           AND TRIM(d.UbicacionTotvs) <> ''
-          AND (d.UbicacionID IS NULL OR d.UbicacionID = 0)
+          AND (d.UbicacionID IS NULL OR d.UbicacionID = '' OR d.UbicacionID = '0')
     """
     try:
         cursor.execute(sql)
