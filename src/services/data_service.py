@@ -56,6 +56,13 @@ class DataService:
             rr['ubicacion']= _s(rr.get('ubicacion', ''))
             rr['nombre']   = _s(rr.get('nombre', ''))
             rr['oc'] = _s(rr.get('oc', ''))
+            rr['anaquel'] = _s(rr.get('anaquel', ''))
+
+            cant = rr.get('cantidad_liberada')
+            try:
+                rr['cantidad_liberada'] = float(cant) if cant is not None else 0.0
+            except:
+                rr['cantidad_liberada'] = 0.0
 
             precio = rr.get('precio')
             try:
@@ -121,6 +128,17 @@ class DataService:
                         det.get('producto'),
                         det.get('descripcion')
                     )
+                    
+                    # 3.1) Llenar/Actualizar ProductosUbicacion con stock de la API
+                    # cantidad_liberada -> Stock, ubicacion -> UbicacionID
+                    prod_ubi_data = {
+                        "ProductoID": det.get('producto'),
+                        "UbicacionID": det.get('ubicacion'),
+                        "AnaquelID": det.get('anaquel') or "",
+                        "Stock": det.get('cantidad_liberada') or 0
+                    }
+                    insertar_producto_ubicacion(self.cursor, prod_ubi_data)
+
                     insertar_picklist_detalle(self.cursor, pid, det)
                     total_detalles_intentados += 1
 

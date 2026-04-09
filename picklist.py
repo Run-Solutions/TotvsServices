@@ -33,7 +33,7 @@ db_config = {
     'host': os.getenv('DB_HOST'),
     'port': os.getenv('DB_PORT'),
     'database': os.getenv('DB_DATABASE'),
-    'raise_on_warnings': True
+    'raise_on_warnings': False
 }
 
 # Tamaño de lote para commits intermedios si lo deseas (no obligatorio aquí)
@@ -253,6 +253,22 @@ def procesar_datos(datos, cursor, cnx):
             # El "INSERT IGNORE" interno se encargará de omitir si el producto/item ya existe.
             insertar_picklist_detalle(cursor, picklist_id, registro)
             
+            # --- NUEVO: Llenar ProductosUbicacion ---
+            # cantidadLiberada -> Stock, ubicacion -> UbicacionID
+            prod_id = _clean_str(registro.get('producto'))
+            ubic_id = _clean_str(registro.get('ubicacion'))
+            if prod_id and ubic_id:
+                try:
+                    sql_ubi = """
+                    INSERT INTO ProductosUbicacion (ProductoID, UbicacionID, Stock)
+                    VALUES (%s, %s, %s)
+                    ON DUPLICATE KEY UPDATE Stock = VALUES(Stock)
+                    """
+                    stock_val = _to_float_or_none(registro.get('cantidad_liberada')) or 0
+                    cursor.execute(sql_ubi, (prod_id, ubic_id, stock_val))
+                except mysql.connector.Error as err:
+                    logging.warning("No se pudo actualizar stock en ProductosUbicacion: %s", err)
+
             if is_new:
                 nuevos_ids.append(picklist_id)
 

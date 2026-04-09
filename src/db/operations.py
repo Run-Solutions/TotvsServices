@@ -86,46 +86,38 @@ def asegurar_producto_en_catalogo(cursor, producto_id: str, descripcion: str = "
 
 def insertar_producto_ubicacion(cursor, data: dict):
     """
-    Inserta en ProductosUbicacion solo si NO existe la combinación (ProductoID, UbicacionID).
-    Si existe, NO inserta ni actualiza (evita tocar el ID existente y no dispara triggers de UPDATE).
-    Requiere UNIQUE (ProductoID, UbicacionID).
+    Inserta en ProductosUbicacion o actualiza el Stock si ya existe.
     """
     try:
         sql = """
-        INSERT IGNORE INTO ProductosUbicacion
+        INSERT INTO ProductosUbicacion
             (ProductoID, UbicacionID, AnaquelID, Stock)
         VALUES
             (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            Stock = VALUES(Stock)
         """
         args = (
             data.get("ProductoID"),
             data.get("UbicacionID"),
-            data.get("AnaquelID"),
-            data.get("Stock")
+            data.get("AnaquelID") or "",
+            data.get("Stock") or 0
         )
         cursor.execute(sql, args)
 
         if cursor.rowcount == 1:
-            # Insertó nuevo
             logger.info("INSERT ProductosUbicacion (ProductoID=%s, UbicacionID=%s) -> nuevo",
                         data.get("ProductoID"), data.get("UbicacionID"))
+        elif cursor.rowcount == 2:
+            logger.info("UPDATE ProductosUbicacion (ProductoID=%s, UbicacionID=%s) -> stock actualizado",
+                        data.get("ProductoID"), data.get("UbicacionID"))
         else:
-            # Ya existía; no se insertó ni actualizó
-            logger.info("INSERT IGNORE: ya existía ProductosUbicacion (ProductoID=%s, UbicacionID=%s) -> omitido",
+            logger.info("ProductosUbicacion (ProductoID=%s, UbicacionID=%s) -> sin cambios",
                         data.get("ProductoID"), data.get("UbicacionID"))
 
-    except mysql.connector.IntegrityError as err:
-        if err.errno == 1062:
-            logger.warning(
-                "Duplicado detectado y omitido (ProductoID=%s, UbicacionID=%s)",
-                data.get("ProductoID"), data.get("UbicacionID")
-            )
-        else:
-            raise
-
     except mysql.connector.Error as err:
-        logger.exception("Error al insertar en ProductosUbicacion")
-        raise  
+        logger.exception("Error al insertar/actualizar en ProductosUbicacion")
+        raise
     
 def actualizar_detalle_desde_picklist(cursor, picklist_ids=None):
     """
