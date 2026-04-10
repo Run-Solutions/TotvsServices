@@ -45,7 +45,7 @@ CHUNK_SIZE = 500
 # Utilidades
 # =========================
 def _clean_str(x):
-    return (x or "").strip()
+    return str(x or "").strip()
 
 def _to_float_or_none(x):
     try:
@@ -79,6 +79,10 @@ def obtener_datos_api():
                 if not isinstance(data, list):
                     logging.error("La respuesta de la API no es una lista.")
                     return []
+
+                # Log para depuración
+                depositos_en_api = set(_clean_str(r.get("deposito")) for r in data)
+                logging.info("Depósitos detectados en la API RYM0501: %s", depositos_en_api)
 
                 # Filtrar para tomar solo las refacciones (depósito "01")
                 data = [r for r in data if _clean_str(r.get("deposito")) == "01"]

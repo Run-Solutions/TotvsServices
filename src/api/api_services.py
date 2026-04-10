@@ -4,7 +4,7 @@ from api.client import APIClient
 from utils.logger import logger
 
 def _clean(x: str | None) -> str:
-    return (x or "").strip()
+    return str(x or "").strip()
 def _to_int(x):
     try:
         return int(str(x).strip())
@@ -31,6 +31,10 @@ class APIService:
         if not isinstance(data, list):
             logger.error("Respuesta PickList no es lista.")
             return []
+
+        # Log para depuración: Ver qué depósitos vienen realmente
+        depositos_encontrados = set(_clean(r.get("deposito")) for r in data)
+        logger.info("Depósitos encontrados en la API RYM0501: %s", depositos_encontrados)
 
         # Filtrar para tomar solo las refacciones (depósito "01")
         data = [r for r in data if _clean(r.get("deposito")) == "01"]
@@ -65,6 +69,10 @@ class APIService:
         for reg in picklist:
             proubi_list = self.consultar_proubi_por_registro(reg)
             for r in proubi_list:
+                # FILTRO CRÍTICO: Asegurar que solo capturamos stock del depósito 01
+                if _clean(r.get("deposito")) != "01":
+                     continue
+
                 out.append({
                     "ProductoID":          _clean(r.get("producto")) or _clean(reg.get("producto")),
                     "ProductoDescripcion": _clean(r.get("descripcion")) or "",

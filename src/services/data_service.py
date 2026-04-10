@@ -87,10 +87,19 @@ class DataService:
                 if not validate_data(registro):
                     logger.warning("Registro inválido omitido (índice %s): %s", i, registro)
                     continue
-                validos.append(_sanitize(registro))
+                
+                sanitized = _sanitize(registro)
+                
+                # SEGURIDAD EXTRA: Solo permitir depósito 01
+                if sanitized.get('deposito') != '01':
+                    logger.warning("BLOQUEADO: Se intentó cargar depósito '%s' para pedido %s. Solo se permite '01'", 
+                                   sanitized.get('deposito'), sanitized.get('pedido'))
+                    continue
+
+                validos.append(sanitized)
 
             if not validos:
-                logger.info("No hay registros válidos para procesar.")
+                logger.info("No hay registros válidos para el depósito 01 para procesar.")
                 return
 
             # 2) Agrupar por (pedido, tienda, cliente, deposito)
