@@ -32,7 +32,10 @@ class APIService:
             logger.error("Respuesta PickList no es lista.")
             return []
 
-        logger.info("PickList: %s registros.", len(data))
+        # Filtrar para tomar solo las refacciones (depósito "01")
+        data = [r for r in data if _clean(r.get("deposito")) == "01"]
+
+        logger.info("PickList: %s registros tras filtrar por depósito 01.", len(data))
         with open("picklist_response.json", "w") as f:
             json.dump(data, f, indent=4)
         return data
@@ -40,7 +43,8 @@ class APIService:
     # 2) Construye el body para PROUBI (RYM0503) a partir de un registro del PickList
     def _build_proubi_body(self, reg: dict) -> dict:
         prod = _clean(reg.get("producto"))
-        depo = _clean(reg.get("deposito"))
+        # Se asegura que la consulta a PROUBI sea solo para el depósito 01 (Refacciones)
+        depo = "01" 
         ubi  = _clean(reg.get("ubicacion"))
         return {
             "de_producto":  prod, "a_producto":   prod,

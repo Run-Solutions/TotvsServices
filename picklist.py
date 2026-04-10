@@ -79,7 +79,11 @@ def obtener_datos_api():
                 if not isinstance(data, list):
                     logging.error("La respuesta de la API no es una lista.")
                     return []
-                logging.info("Datos obtenidos exitosamente desde la API: %s registros.", len(data))
+
+                # Filtrar para tomar solo las refacciones (depósito "01")
+                data = [r for r in data if _clean_str(r.get("deposito")) == "01"]
+
+                logging.info("Datos obtenidos exitosamente desde la API: %s registros tras filtrar por depósito 01.", len(data))
                 return data
             except json.JSONDecodeError:
                 logging.error("La respuesta de la API no está en formato JSON.")
